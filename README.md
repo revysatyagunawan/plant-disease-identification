@@ -4,7 +4,7 @@ Plant Health Diagnostics using Support Vector Machine (SVM)
 ## Technical Implementation (Pipeline)
 | Stage | Technique | Input | Output |
 | :--- | :--- | :--- | :--- |
-| 1. Preprocessing | Grayscale/RGB -> Gaussian Blur -> CLAHE | image_path: str | preprocessed: np.ndarray (H×W×C) |
+| 1. Preprocessing | Gaussian Blur -> LAB CLAHE | image_path: str | preprocessed: np.ndarray (H×W×C) |
 | 2. Segmentation | K-Means clustering (background separation) | preprocessed | leaf_mask: np.ndarray |
 | 3. Morphology | Opening & Closing for noise reduction | leaf_mask | clean_mask: np.ndarray |
 | 4. Feature Extraction | Edge (Canny) + GLCM + LBP + Color Stat | img + clean_mask | feature_vector: np.ndarray (1D) |
@@ -22,6 +22,7 @@ Plant Health Diagnostics using Support Vector Machine (SVM)
 - Format: RGB Images.
 
 ## Project Structure
+```
 plant-disease-identification/
 ├── data/
 │   ├── train/                 # 80% Training Data
@@ -37,6 +38,7 @@ plant-disease-identification/
 │   └── CODEOWNERS
 ├── requirements.txt
 └── README.md
+```
 
 ## Setup & Installation
 ### Prerequisites
@@ -70,7 +72,7 @@ Always create a new branch from main before starting work (example: feature/prep
 ### Pipeline Modules
 1. Preprocessing (src/preprocessing.py)
    - Gaussian Blur (for noise reduction).
-   - CLAHE (for contrast equalization to visualize spots).
+   - CLAHE (the image is converted from BGR to LAB color space. CLAHE is applied only to the Luminance [L] channel).
 2. Segmentation (src/segmentation.py)
    - K-Means clustering to isolate leaf pixel areas.
 3. Morphology (src/segmentation.py)
