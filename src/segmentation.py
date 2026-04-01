@@ -21,7 +21,7 @@ def segmentation(preprocessed_img, k=3):
     binary_mask[labels_2d == bg_label] = 0
 
     # morphological processing 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     clean_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel, iterations=2)
     clean_mask = cv2.morphologyEx(clean_mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
