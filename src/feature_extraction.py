@@ -1,43 +1,4 @@
-"""
-Feature Extraction Pipeline - PlantVillage Dataset
-====================================================
-Techniques : Edge (Canny) + GLCM + LBP + Color Statistics
-Input      : img (H x W x 3, BGR/RGB uint8) + clean_mask (H x W, binary uint8)
-Output     : feature_vector (1D np.ndarray)
-
-Feature breakdown
------------------
-Canny Edge  :  4 features
-GLCM        : 24 features   (4 props × 4 angles × 1 distance)
-LBP         : 26 features   (26-bin normalised histogram, P=8, R=1)
-Color Stats : 18 features   (mean, std, skewness per channel × 3 channels × 2 spaces)
-─────────────────────────────────────────────────────
-Total       : 72 features
-"""
-
-import cv2
-import numpy as np
-from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
-from scipy.stats import skew
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 1. CANNY EDGE FEATURES
-# ─────────────────────────────────────────────────────────────────────────────
 def extract_canny_features(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """
-    Extract edge-density statistics from a Canny edge map.
-
-    Parameters
-    ----------
-    gray : np.ndarray  – Grayscale image  (H × W, uint8)
-    mask : np.ndarray  – Binary mask      (H × W, uint8, 0/255)
-
-    Returns
-    -------
-    features : np.ndarray shape (4,)
-        [edge_density, mean_edge_intensity, std_edge_intensity, edge_pixel_ratio]
-    """
     # Adaptive thresholds based on Otsu for robustness across lighting conditions
     otsu_thresh, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     low  = max(0.5 * otsu_thresh, 10)
@@ -64,10 +25,6 @@ def extract_canny_features(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:
         dtype=np.float32,
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. GLCM FEATURES
-# ─────────────────────────────────────────────────────────────────────────────
 def extract_glcm_features(
     gray    : np.ndarray,
     mask    : np.ndarray,
@@ -75,28 +32,6 @@ def extract_glcm_features(
     distances: list[int] = [1],
     angles  : list[float] = [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4],
 ) -> np.ndarray:
-    """
-    Compute GLCM-based texture descriptors inside the masked region.
-
-    Properties extracted: contrast, dissimilarity, homogeneity,
-                          energy, correlation, ASM
-    Each property is computed for every (distance × angle) pair, then
-    averaged across angles → distance × n_props scalar values.
-
-    Parameters
-    ----------
-    gray      : np.ndarray  – Grayscale image (H × W, uint8)
-    mask      : np.ndarray  – Binary mask     (H × W, uint8, 0/255)
-    levels    : int         – Grey levels to quantise to (default 256 → rescaled to 64)
-    distances : list[int]   – Pixel-pair distances
-    angles    : list[float] – Directions in radians
-
-    Returns
-    -------
-    features : np.ndarray shape (len(distances) × 4,) = (4,) for default config
-        props averaged over angles: [contrast, dissimilarity, homogeneity, energy,
-                                     correlation, ASM]  × distances
-    """
     # Quantise to 64 levels to reduce GLCM noise and computation cost
     n_levels = 64
     gray_q   = (gray / 255.0 * (n_levels - 1)).astype(np.uint8)
@@ -121,9 +56,16 @@ def extract_glcm_features(
         angles=angles,
         levels=n_levels,
         symmetric=True,
-        normed=True,
+        normed=False,
     )
 
+    glcm[0, :, :, :] = 0
+    glcm[:, 0, :, :] = 0
+
+    glcm_sums = np.sum(glcm, axis=(0, 1), keepdims=True)
+    glcm_sums[glcm_sums == 0] = 1
+    glcm = glcm / glcm_sums
+    
     props = ["contrast", "dissimilarity", "homogeneity", "energy"]
     feature_list = []
     for prop in props:
@@ -133,10 +75,6 @@ def extract_glcm_features(
     # Flatten: (n_props × n_distances,) → 1D
     return np.concatenate(feature_list).astype(np.float32)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. LBP FEATURES
-# ─────────────────────────────────────────────────────────────────────────────
 def extract_lbp_features(
     gray    : np.ndarray,
     mask    : np.ndarray,
@@ -144,22 +82,6 @@ def extract_lbp_features(
     R       : float = 1.0,
     method  : str = "uniform",
 ) -> np.ndarray:
-    """
-    Compute normalised LBP histogram restricted to the masked region.
-
-    Parameters
-    ----------
-    gray   : np.ndarray  – Grayscale image (H × W, uint8)
-    mask   : np.ndarray  – Binary mask     (H × W, uint8, 0/255)
-    P      : int         – Number of circularly symmetric neighbour points
-    R      : float       – Radius of circle
-    method : str         – LBP method ('uniform' → P+2 bins, 'default' → 2^P bins)
-
-    Returns
-    -------
-    features : np.ndarray shape (P+2,) = (10,) for P=8 uniform
-        Normalised histogram of LBP codes
-    """
     lbp = local_binary_pattern(gray, P, R, method=method)
 
     # Uniform LBP produces P+2 distinct patterns
@@ -183,28 +105,10 @@ def extract_lbp_features(
     return hist
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. COLOR STATISTICS
-# ─────────────────────────────────────────────────────────────────────────────
 def extract_color_stats(
     img  : np.ndarray,
     mask : np.ndarray,
 ) -> np.ndarray:
-    """
-    Compute per-channel colour statistics inside the masked region.
-
-    Colour spaces: RGB + HSV
-    Statistics    : mean, std, skewness  →  3 stats × 3 channels × 2 spaces = 18 features
-
-    Parameters
-    ----------
-    img  : np.ndarray  – BGR image (H × W × 3, uint8) — OpenCV default
-    mask : np.ndarray  – Binary mask (H × W, uint8, 0/255)
-
-    Returns
-    -------
-    features : np.ndarray shape (18,)
-    """
     mask_bool = mask > 0
 
     if mask_bool.sum() == 0:
@@ -229,29 +133,7 @@ def extract_color_stats(
     return np.array(features, dtype=np.float32)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MAIN PIPELINE
-# ─────────────────────────────────────────────────────────────────────────────
 def extract_features(img: np.ndarray, clean_mask: np.ndarray) -> np.ndarray:
-    """
-    Full feature-extraction pipeline.
-
-    Parameters
-    ----------
-    img        : np.ndarray  – BGR image (H × W × 3, uint8)
-    clean_mask : np.ndarray  – Binary mask after morphological cleaning
-                               (H × W, uint8).  Non-zero pixels = ROI.
-
-    Returns
-    -------
-    feature_vector : np.ndarray  – 1D array of dtype float32
-        Concatenation of:
-          [canny(4) | glcm(4) | lbp(10) | color_stats(18)]
-          Total: 36 features
-          
-          ▸ Change P in LBP → P+2 bins
-          ▸ Add distances / angles in GLCM → more features
-    """
     # ── Validate inputs ───────────────────────────────────────────────────────
     assert img.ndim == 3 and img.shape[2] == 3, \
         f"img must be (H, W, 3); got {img.shape}"
@@ -277,10 +159,6 @@ def extract_features(img: np.ndarray, clean_mask: np.ndarray) -> np.ndarray:
 
     return feature_vector
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FEATURE NAMES (useful for DataFrame columns / model interpretation)
-# ─────────────────────────────────────────────────────────────────────────────
 def get_feature_names(P: int = 8) -> list[str]:
     """Return ordered feature names matching the vector from extract_features()."""
     names = []
@@ -308,60 +186,3 @@ def get_feature_names(P: int = 8) -> list[str]:
     return names
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# BATCH PROCESSING UTILITY
-# ─────────────────────────────────────────────────────────────────────────────
-def batch_extract(
-    image_mask_pairs: list[tuple[np.ndarray, np.ndarray]],
-    verbose: bool = True,
-) -> np.ndarray:
-    """
-    Extract features for a list of (image, mask) pairs.
-
-    Parameters
-    ----------
-    image_mask_pairs : list of (img, mask) tuples
-    verbose          : print progress every 100 samples
-
-    Returns
-    -------
-    X : np.ndarray, shape (N, n_features)
-    """
-    results = []
-    for i, (img, mask) in enumerate(image_mask_pairs):
-        try:
-            fv = extract_features(img, mask)
-            results.append(fv)
-        except Exception as e:
-            print(f"[WARNING] Sample {i} failed: {e}. Using zero vector.")
-            results.append(np.zeros(36, dtype=np.float32))
-
-        if verbose and (i + 1) % 100 == 0:
-            print(f"  Processed {i + 1} / {len(image_mask_pairs)}")
-
-    return np.stack(results, axis=0)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# QUICK SMOKE-TEST
-# ─────────────────────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    # Synthetic test with a circular mask in the center
-    H, W = 256, 256
-    dummy_img  = np.random.randint(0, 256, (H, W, 3), dtype=np.uint8)
-    dummy_mask = np.zeros((H, W), dtype=np.uint8)
-    cv2.circle(dummy_mask, (W // 2, H // 2), 80, 255, -1)
-
-    fv = extract_features(dummy_img, dummy_mask)
-    names = get_feature_names()
-
-    print(f"\n{'='*55}")
-    print(f"  Feature vector length : {len(fv)}")
-    print(f"  dtype                 : {fv.dtype}")
-    print(f"  any NaN / Inf         : {np.any(~np.isfinite(fv))}")
-    print(f"{'='*55}")
-    print(f"\n{'Feature':<30} {'Value':>12}")
-    print("-" * 44)
-    for name, val in zip(names, fv):
-        print(f"  {name:<28} {val:>12.4f}")
-    print(f"{'='*55}\n")
