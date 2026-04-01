@@ -8,8 +8,8 @@ from sklearn.pipeline import make_pipeline
 def main():
     #File ekstraksi dimuat
     try:
-        x_train = np.load('data/x_train.npy', allow_pickle=True)
-        y_train = np.load('data/y_train.npy', allow_pickle=True)
+        x_train = np.load('../data/x_train.npy', allow_pickle=True)
+        y_train = np.load('../data/y_train.npy', allow_pickle=True)
     except FileNotFoundError:
         print("Error: File data tidak ada di folder 'data'")
         return
@@ -31,11 +31,11 @@ def main():
     pipeline.fit(x_train, y_train_encoded)
     
     # Menyimpan model dan encoder
-    os.makedirs('models', exist_ok=True)
+    os.makedirs('../models', exist_ok=True)
     
     # Kita simpan model SVM dan kamus penerjemah labelnya
-    joblib.dump(pipeline, 'models/svm_plantvillage.pkl')
-    joblib.dump(le, 'models/label_encoder.pkl')
+    joblib.dump(pipeline, '../models/svm_plantvillage.pkl')
+    joblib.dump(le, '../models/label_encoder.pkl')
     
     print("Selesai")
 

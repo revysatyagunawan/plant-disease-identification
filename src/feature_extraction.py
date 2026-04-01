@@ -1,3 +1,8 @@
+import cv2
+import numpy as np
+from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
+from scipy.stats import skew
+
 def extract_canny_features(gray: np.ndarray, mask: np.ndarray) -> np.ndarray:
     # Adaptive thresholds based on Otsu for robustness across lighting conditions
     otsu_thresh, _ = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -104,7 +109,6 @@ def extract_lbp_features(
 
     return hist
 
-
 def extract_color_stats(
     img  : np.ndarray,
     mask : np.ndarray,
@@ -131,7 +135,6 @@ def extract_color_stats(
         features.extend(channel_stats(img_hsv[:, :, c]))
 
     return np.array(features, dtype=np.float32)
-
 
 def extract_features(img: np.ndarray, clean_mask: np.ndarray) -> np.ndarray:
     # ── Validate inputs ───────────────────────────────────────────────────────
@@ -184,5 +187,3 @@ def get_feature_names(P: int = 8) -> list[str]:
                 names.append(f"{space}_{ch}_{stat}")
 
     return names
-
-
