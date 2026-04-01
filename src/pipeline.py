@@ -1,9 +1,9 @@
 import os
 import numpy as np
 
-from src.preprocessing import preprocess
-from src.segmentation import segmentation
-from src.feature_extraction import extract_features
+from preprocessing import preprocess
+from segmentation import segmentation
+from feature_extraction import extract_features
 
 def process_folder(dataset_dir: str):
     X = []
